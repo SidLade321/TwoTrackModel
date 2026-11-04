@@ -18,6 +18,42 @@ A bicycle model lumps each axle into one tyre, so it can't see lateral load tran
 | 6 | Transient: linearised yaw/lateral frequency response at several speeds, checked against a nonlinear sine steer (`linearise.m`) | Done |
 | 7 | Validation against a bicycle model and team data | Planned |
 
+## Findings by stage
+
+All results use the placeholder parameters above, so the **trends and mechanisms** are the findings. The exact numbers will change once real car data goes in.
+
+### Stage 2: Load transfer
+- **Question:** How is load spread across the four tyres in braking, acceleration and cornering, and what does the roll stiffness split change?
+- **What we did:** Calculated corner loads for four manoeuvres, then doubled the front roll stiffness.
+- **Finding:** At 1.5 g cornering the inside front drops to about 230 N. Doubling the front roll stiffness moves more lateral load transfer onto the front axle and cuts that to about 87 N. Doubling it again lifts the wheel completely. **Roll stiffness distribution decides which axle takes the load transfer.**
+
+### Stage 3: Tyre load sensitivity
+- **Question:** Why does load transfer cost grip?
+- **What we did:** Built a Pacejka tyre model where friction falls with load, then compared each axle's peak grip with and without lateral load transfer.
+- **Finding:** Peak μ falls from about 1.8 at light load to about 1.3 at heavy load, so the outside tyre gains less grip than the inside tyre loses. Shifting roll stiffness forwards moves the grip loss forwards (front loss rises from 3.8 % to 12.4 %). **This is the mechanism by which anti-roll bars tune balance.**
+
+### Stage 4: Equations of motion
+- **Question:** Does the full 3-DOF model behave like a real car?
+- **What we did:** Ran four checks (straight line, low-speed kinematic yaw rate, left/right symmetry, no wheel lift) and a 4° step steer at 15 m/s.
+- **Finding:** All checks pass, and the low-speed yaw rate matches v·δ/L to within 0.1 %. The car settles in about 0.3 s at 1.01 g.
+- **Problem found:** The first run showed wheel-lift warnings, although the final loads never fell below 385 N. The cause was numerical: an instant steer step combined with large solver steps made `ode45` try trial points that briefly predicted lift. **Fix:** a 0.1 s steer ramp (as in ISO 7401) and a 0.01 s maximum step.
+
+### Stage 5: Steady-state cornering
+- **Question:** What is the car's balance and grip limit on the skidpad, and what roll stiffness split maximises it?
+- **What we did:** Swept speed on the 9.125 m skidpad radius, solving for steady-state equilibrium at each speed, for 19 different front/rear roll stiffness splits.
+- **Finding:** Max lateral g peaks at **40 % front roll stiffness (1.55 g)**, compared with 1.48 g at the baseline 53 %. Below 40 % the rear saturates first (limit oversteer); above it the front does (limit understeer). The optimum is **not** the static front weight distribution (47 %), so the model was needed to find it.
+- **Problem found:** With parallel steer, a stiffer front gave *more* oversteer in the linear range, the opposite of expectation. On a tight radius the outer front tyre runs a far larger slip angle than the inner one (1.7° vs 0.6°), so moving load onto it *increased* front grip. **Fix:** added geometric Ackermann as a parameter. With it, the understeer gradient rises with front roll stiffness as expected (0.020 → 0.116 deg/g).
+
+### Stage 6: Transient response
+- **Question:** How quickly and how stably does the car respond to steering, and how does that change with speed?
+- **What we did:** Linearised the model about straight-line driving, computed the yaw-rate and lateral-acceleration frequency response at 10–25 m/s, and checked it against a nonlinear 1 Hz sine steer.
+- **Finding:** The car is stable and slightly overdamped (ζ ≈ 1.02) at all speeds. Yaw-rate lag at 1 Hz doubles from 6.5° at 10 m/s to 12.8° at 25 m/s, so the car feels lazier at speed. At low speed lateral acceleration *leads* the steer, because the front tyres produce force before the car has rotated. The linear and nonlinear results agree to within 0.1 %.
+
+### Next
+- **Stage 7:** validate against a bicycle model, then against Southampton FS skidpad data.
+- Replace the placeholder parameters with measured car data, and fit the tyre model to test data.
+- Model improvements: combined slip, tyre relaxation length, roll dynamics.
+
 ## Usage
 ```matlab
 test_loadTransfer   % sanity checks + corner loads for 4 manoeuvres
@@ -132,40 +168,3 @@ The model is linearised about straight-line driving using numerical Jacobians of
 - **Linear vs nonlinear check:** a 0.5° sine steer at 1 Hz and 15 m/s in the full model gives a yaw gain of 9.59 1/s and a phase of −9.1°, matching the linear prediction to within 0.1 %.
 
 **Caveat:** the tyres respond instantly (no relaxation length), so the phase lag here is a lower bound. Real tyres take about a tyre circumference to build up force, which adds lag at higher frequency.
-
-## Findings by stage
-
-All results use the placeholder parameters above, so the **trends and mechanisms** are the findings. The exact numbers will change once real car data goes in.
-
-### Stage 2: Load transfer
-- **Question:** How is load spread across the four tyres in braking, acceleration and cornering, and what does the roll stiffness split change?
-- **What we did:** Calculated corner loads for four manoeuvres, then doubled the front roll stiffness.
-- **Finding:** At 1.5 g cornering the inside front drops to about 230 N. Doubling the front roll stiffness moves more lateral load transfer onto the front axle and cuts that to about 87 N. Doubling it again lifts the wheel completely. **Roll stiffness distribution decides which axle takes the load transfer.**
-
-### Stage 3: Tyre load sensitivity
-- **Question:** Why does load transfer cost grip?
-- **What we did:** Built a Pacejka tyre model where friction falls with load, then compared each axle's peak grip with and without lateral load transfer.
-- **Finding:** Peak μ falls from about 1.8 at light load to about 1.3 at heavy load, so the outside tyre gains less grip than the inside tyre loses. Shifting roll stiffness forwards moves the grip loss forwards (front loss rises from 3.8 % to 12.4 %). **This is the mechanism by which anti-roll bars tune balance.**
-
-### Stage 4: Equations of motion
-- **Question:** Does the full 3-DOF model behave like a real car?
-- **What we did:** Ran four checks (straight line, low-speed kinematic yaw rate, left/right symmetry, no wheel lift) and a 4° step steer at 15 m/s.
-- **Finding:** All checks pass, and the low-speed yaw rate matches v·δ/L to within 0.1 %. The car settles in about 0.3 s at 1.01 g.
-- **Problem found:** The first run showed wheel-lift warnings, although the final loads never fell below 385 N. The cause was numerical: an instant steer step combined with large solver steps made `ode45` try trial points that briefly predicted lift. **Fix:** a 0.1 s steer ramp (as in ISO 7401) and a 0.01 s maximum step.
-
-### Stage 5: Steady-state cornering
-- **Question:** What is the car's balance and grip limit on the skidpad, and what roll stiffness split maximises it?
-- **What we did:** Swept speed on the 9.125 m skidpad radius, solving for steady-state equilibrium at each speed, for 19 different front/rear roll stiffness splits.
-- **Finding:** Max lateral g peaks at **40 % front roll stiffness (1.55 g)**, compared with 1.48 g at the baseline 53 %. Below 40 % the rear saturates first (limit oversteer); above it the front does (limit understeer). The optimum is **not** the static front weight distribution (47 %), so the model was needed to find it.
-- **Problem found:** With parallel steer, a stiffer front gave *more* oversteer in the linear range, the opposite of expectation. On a tight radius the outer front tyre runs a far larger slip angle than the inner one (1.7° vs 0.6°), so moving load onto it *increased* front grip. **Fix:** added geometric Ackermann as a parameter. With it, the understeer gradient rises with front roll stiffness as expected (0.020 → 0.116 deg/g).
-
-### Stage 6: Transient response
-- **Question:** How quickly and how stably does the car respond to steering, and how does that change with speed?
-- **What we did:** Linearised the model about straight-line driving, computed the yaw-rate and lateral-acceleration frequency response at 10–25 m/s, and checked it against a nonlinear 1 Hz sine steer.
-- **Finding:** The car is stable and slightly overdamped (ζ ≈ 1.02) at all speeds. Yaw-rate lag at 1 Hz doubles from 6.5° at 10 m/s to 12.8° at 25 m/s, so the car feels lazier at speed. At low speed lateral acceleration *leads* the steer, because the front tyres produce force before the car has rotated. The linear and nonlinear results agree to within 0.1 %.
-
-### Next
-- **Stage 7:** validate against a bicycle model, then against Southampton FS skidpad data.
-- Replace the placeholder parameters with measured car data, and fit the tyre model to test data.
-- Model improvements: combined slip, tyre relaxation length, roll dynamics.
-
