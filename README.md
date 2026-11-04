@@ -16,7 +16,8 @@ A bicycle model lumps each axle into one tyre, so it can't see lateral load tran
 | 4 | 3-DOF equations of motion: vx, vy, yaw rate, integrated with `ode45` (`vehicleODE.m`) | Done |
 | 5 | Steady-state cornering on the skidpad radius: understeer gradient, max lateral g, optimum roll stiffness split (`steadyState.m`) | Done |
 | 6 | Transient: linearised yaw/lateral frequency response at several speeds, checked against a nonlinear sine steer (`linearise.m`) | Done |
-| 7 | Validation against a bicycle model and team data | Planned |
+| 7a | Validation against a bicycle model (`bicycleModel.m`, `bicycleSteadyState.m`) | Done |
+| 7b | Validation against Southampton FS skidpad data | Awaiting team data |
 
 ## Findings by stage
 
@@ -49,8 +50,13 @@ All results use the placeholder parameters above, so the **trends and mechanisms
 - **What we did:** Linearised the model about straight-line driving, computed the yaw-rate and lateral-acceleration frequency response at 10–25 m/s, and checked it against a nonlinear 1 Hz sine steer.
 - **Finding:** The car is stable and slightly overdamped (ζ ≈ 1.02) at all speeds. Yaw-rate lag at 1 Hz doubles from 6.5° at 10 m/s to 12.8° at 25 m/s, so the car feels lazier at speed. At low speed lateral acceleration *leads* the steer, because the front tyres produce force before the car has rotated. The linear and nonlinear results agree to within 0.1 %.
 
+### Stage 7a: Bicycle model validation
+- **Question:** Does the two-track model reduce to the textbook bicycle model where it should, and what does it add where it doesn't?
+- **What we did:** Built linear and nonlinear bicycle models with the *same* parameters and tyre model, then compared yaw gain and eigenvalues (5–30 m/s) and the skidpad steer and grip limit.
+- **Finding:** In the linear range the two models are **identical** (yaw gain difference ≈ 0 %, same eigenvalues), which confirms the two-track equations. On the skidpad they agree to within 0.05° at 0.5 g but are 0.9° apart by 1.4 g. The bicycle model predicts **1.73 g**, against **1.48 g** for the two-track model at the baseline roll split (1.55 g at the 40 % optimum). **Ignoring lateral load transfer overestimates grip by about 15 %**, and that gap is what the two-track model exists to capture.
+
 ### Next
-- **Stage 7:** validate against a bicycle model, then against Southampton FS skidpad data.
+- **Stage 7b:** validate against Southampton FS skidpad data.
 - Replace the placeholder parameters with measured car data, and fit the tyre model to test data.
 - Model improvements: combined slip, tyre relaxation length, roll dynamics.
 
@@ -61,6 +67,7 @@ test_tyre           % tyre curves, load sensitivity, axle grip loss
 test_vehicleODE     % straight-line, kinematic and symmetry checks + step steer
 test_steadyState    % constant-radius sweep, understeer curves, roll-split optimum
 test_frequencyResponse  % yaw-rate gain/phase vs frequency, linear vs nonlinear check
+test_bicycle        % validation against a bicycle model
 ```
 
 ## Parameters and assumptions
@@ -168,3 +175,21 @@ The model is linearised about straight-line driving using numerical Jacobians of
 - **Linear vs nonlinear check:** a 0.5° sine steer at 1 Hz and 15 m/s in the full model gives a yaw gain of 9.59 1/s and a phase of −9.1°, matching the linear prediction to within 0.1 %.
 
 **Caveat:** the tyres respond instantly (no relaxation length), so the phase lag here is a lower bound. Real tyres take about a tyre circumference to build up force, which adds lag at higher frequency.
+
+## Bicycle model validation (stage 7a)
+![Bicycle validation](bicycle_validation.png)
+
+The bicycle model lumps each axle into a single tyre, so there is no lateral load transfer. It uses the same mass, geometry, aero and Pacejka tyre as the two-track model, with axle cornering stiffness taken from the tyre's initial slope (B·C·D) at the static plus aero load.
+
+| | Bicycle | Two-track |
+|---|---|---|
+| Yaw gain r/δ at 15 m/s | 9.72 1/s | 9.72 1/s |
+| Eigenvalues at 15 m/s | −27.7, −39.6 | −27.7, −39.6 |
+| Skidpad steer at 0.5 g | 9.72° | 9.67° |
+| Skidpad steer at 1.4 g | 9.65° | 10.57° |
+| Skidpad grip limit | 1.73 g | 1.48 g (1.55 g at 40 % front roll) |
+
+- **Exact linear agreement is expected.** About straight-line driving there is no lateral acceleration and so no load transfer, which makes the two models mathematically equivalent. Matching to machine precision confirms the two-track equations of motion, tyre force resolution and linearisation.
+- **The straight-line understeer gradient is −0.016 deg/g at 15 m/s**, very slight oversteer. The front corner load is lower, so with load sensitivity the front tyres have a slightly higher μ and slightly more cornering stiffness per newton.
+- **Divergence at high g is the point of the two-track model.** The bicycle model's tyres share each axle's load equally right up to the limit, so it never loses grip to load transfer and its steer barely changes with g. The two-track model shows both the loss of grip and the understeer that builds near the limit.
+
