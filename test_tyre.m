@@ -7,7 +7,7 @@ deg = pi/180;
 alpha = linspace(0, 15, 300) * deg;
 loads = [300 700 1100 1500];
 
-figure('Name','Tyre curves');
+fig = figure('Name','Tyre curves');
 subplot(1,2,1); hold on; grid on;
 for Fz = loads
     plot(alpha/deg, tyreLateral(p, alpha, Fz), 'LineWidth', 1.5, ...
@@ -23,6 +23,8 @@ subplot(1,2,2); grid on;
 plot(Fz_range, peakFy ./ Fz_range, 'LineWidth', 1.5);
 xlabel('F_z [N]'); ylabel('Peak \mu = F_{y,max}/F_z');
 title('Load sensitivity');
+drawnow;
+exportgraphics(fig, 'tyre_curves.png', 'Resolution', 200);  % saved next to the scripts
 
 %% Check: peak grip grows LESS than proportionally with load
 assert(max(tyreLateral(p, alpha, 1400)) < 2*max(tyreLateral(p, alpha, 700)), ...
