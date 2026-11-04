@@ -14,8 +14,8 @@ A bicycle model lumps each axle into one tyre, so it can't see lateral load tran
 | 2 | Quasi-static load transfer: longitudinal, lateral (geometric + elastic split), aero (`loadTransfer.m`) | Done |
 | 3 | Tyre model: simplified Pacejka with load sensitivity (`tyreLateral.m`) | Done |
 | 4 | 3-DOF equations of motion: vx, vy, yaw rate, integrated with `ode45` (`vehicleODE.m`) | Done |
-| 5 | Steady-state cornering: understeer gradient, max lateral g | In progress |
-| 6 | Transient: step steer and sine steer | Planned |
+| 5 | Steady-state cornering on the skidpad radius: understeer gradient, max lateral g, optimum roll stiffness split (`steadyState.m`) | Done |
+| 6 | Transient: linearised yaw/lateral frequency response at several speeds, checked against a nonlinear sine steer (`linearise.m`) | Done |
 | 7 | Validation against a bicycle model and team data | Planned |
 
 ## Usage
@@ -23,6 +23,8 @@ A bicycle model lumps each axle into one tyre, so it can't see lateral load tran
 test_loadTransfer   % sanity checks + corner loads for 4 manoeuvres
 test_tyre           % tyre curves, load sensitivity, axle grip loss
 test_vehicleODE     % straight-line, kinematic and symmetry checks + step steer
+test_steadyState    % constant-radius sweep, understeer curves, roll-split optimum
+test_frequencyResponse  % yaw-rate gain/phase vs frequency, linear vs nonlinear check
 ```
 
 ## Parameters and assumptions
@@ -40,6 +42,7 @@ test_vehicleODE     % straight-line, kinematic and symmetry checks + step steer
 | Yaw inertia | I_zz | 120 kg·m² | Estimate, roughly m·(L/2)² |
 | Front / rear roll centre height | h_rcf, h_rcr | 0.03 / 0.05 m | Low roll centres, rear slightly higher (typical) |
 | Front / rear roll stiffness | K_φf, K_φr | 20,000 / 18,000 Nm/rad | Estimate, gives a near-neutral balance |
+| Ackermann fraction | — | 1.0 | 100% geometric Ackermann (0 = parallel steer) |
 
 ### Aero
 | Parameter | Symbol | Value | Basis |
@@ -65,7 +68,7 @@ These tyre values are **not fitted to tyre test data**. Fitting to real data (e.
 - **Rigid body, 3 DOF** (v_x, v_y, yaw rate). No roll, pitch or heave dynamics; roll only enters through quasi-static load transfer.
 - **Quasi-static load transfer** using a_y ≈ v_x·r (exact in steady state, approximate in transients).
 - **Lateral tyre forces only**, with no combined slip: drive force does not reduce lateral grip.
-- **No Ackermann**: both front wheels steer by the same angle.
+- **Geometric Ackermann** set by a single fraction. No bump steer, roll steer or compliance steer.
 - **No tyre relaxation length**: tyre forces respond instantly to slip angle.
 - **Rear-wheel drive** with a simple proportional speed-hold controller.
 - **Constant aero coefficients**, with no ride-height or yaw sensitivity.
@@ -90,6 +93,43 @@ Shifting roll stiffness forwards moves the grip loss to the front axle, which me
 ## Step steer (stage 4)
 ![Step steer](step_steer.png)
 
-4° of steer ramped in over 0.1 s at 15 m/s. The car settles within about 0.3 s at 1.02 g on a 22.4 m radius. The geometric radius at this steer angle is L/δ = 22.2 m, so the car turns slightly less than geometry predicts: mild understeer, consistent with the near-equal front and rear grip losses above.
+4° of steer ramped in over 0.1 s at 15 m/s. The car settles within about 0.3 s at 1.01 g on a 22.6 m radius. The geometric radius at this steer angle is L/δ = 22.2 m, so the car turns slightly less than geometry predicts: mild understeer, consistent with the near-equal front and rear grip losses above.
 
 Checks: a straight line stays straight; the low-speed yaw rate matches the kinematic value v·δ/L to within 0.1%; left and right turns are exact mirror images; no wheel lifts during the manoeuvre.
+
+## Steady-state cornering (stage 5)
+![Steady state](steady_state.png)
+
+A constant-radius test in the style of ISO 4138, on the FS skidpad centreline radius (R = 9.125 m). At each speed, Newton-Raphson finds the steer angle and body slip that hold the car on the circle with zero lateral and yaw acceleration. Speed is raised until no equilibrium exists. That point is the grip limit.
+
+| Front roll stiffness | Front share | Understeer gradient | Max a_y | Limiting axle |
+|---|---|---|---|---|
+| 10,000 Nm/rad | 36 % | 0.020 deg/g | 1.52 g | Rear |
+| 20,000 Nm/rad | 53 % | 0.068 deg/g | 1.48 g | Front |
+| 40,000 Nm/rad | 69 % | 0.116 deg/g | 1.38 g | Front |
+
+**Key result:** with these placeholder parameters, the grip limit peaks at about **40 % front roll stiffness (1.55 g)**. Below that the rear saturates first (limit oversteer); above it the front does (limit understeer). The optimum is where both axles run out of grip together.
+
+The understeer curve shows the same thing: at 36 % front the steer angle drops sharply near the limit (the rear lets go), while at 53 % and 69 % it climbs steeply (the front washes out).
+
+**Ackermann matters on a tight radius.** With parallel steer, the outer front tyre runs a much larger slip angle than the inner one. Stiffening the front then moves load onto the tyre doing the most work, which reverses the expected trend in the linear range. Adding geometric Ackermann removes that artefact, so Ackermann is now a parameter.
+
+## Transient response (stage 6)
+![Frequency response](frequency_response.png)
+
+The model is linearised about straight-line driving using numerical Jacobians of the full nonlinear model, giving a 2-state system (lateral velocity, yaw rate). From it come the frequency response of yaw rate and lateral acceleration to steer (base MATLAB only, no Control Toolbox) and the stability of the yaw mode.
+
+| Speed | Eigenvalues [1/s] | Damping ζ | Yaw gain r/δ [1/s] | Kinematic v/L [1/s] | Yaw-rate lag at 1 Hz |
+|---|---|---|---|---|---|
+| 10 m/s | −39, −56 | 1.02 | 6.47 | 6.45 | 6.5° |
+| 15 m/s | −28, −40 | 1.02 | 9.72 | 9.68 | 9.1° |
+| 20 m/s | −22, −32 | 1.02 | 12.97 | 12.90 | 11.2° |
+| 25 m/s | −19, −28 | 1.02 | 16.24 | 16.13 | 12.8° |
+
+- **Stable and slightly overdamped** at every speed tested (both eigenvalues real and negative), so the car settles without yaw overshoot.
+- **Response slows with speed**: the eigenvalues move towards zero and the phase lag at 1 Hz roughly doubles from 10 to 25 m/s. This is the usual behaviour of a road vehicle.
+- **Near-neutral in a straight line**: the yaw gain sits within 1 % of the kinematic value. It is slightly above kinematic, meaning a very small amount of oversteer about the straight. That differs from the mild understeer seen on the skidpad, where load transfer and Ackermann come into play.
+- **Linear vs nonlinear check:** a 0.5° sine steer at 1 Hz and 15 m/s in the full model gives a yaw gain of 9.59 1/s and a phase of −9.1°, matching the linear prediction to within 0.1 %.
+
+**Caveat:** the tyres respond instantly (no relaxation length), so the phase lag here is a lower bound. Real tyres take about a tyre circumference to build up force, which adds lag at higher frequency.
+
