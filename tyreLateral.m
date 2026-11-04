@@ -1,6 +1,7 @@
-function Fy = tyreLateral(p, alpha, Fz)
+function [Fy, D] = tyreLateral(p, alpha, Fz)
 % TYRELATERAL  Lateral tyre force, simplified Pacejka with load sensitivity.
-%   Fy = tyreLateral(p, alpha, Fz)
+%   [Fy, D] = tyreLateral(p, alpha, Fz)
+%   D     : peak available lateral force [N] (optional second output)
 %   alpha : slip angle [rad] (scalar or array)
 %   Fz    : vertical load [N] (scalar or same size as alpha)
 %   Fy    : lateral force [N], same sign as alpha

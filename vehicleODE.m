@@ -12,7 +12,7 @@ function [dx, out] = vehicleODE(t, x, p, steerFn, vref)
 % Simplifications (to revisit later):
 %   - Load transfer uses quasi-static ay = vx*r (steady-state approximation)
 %   - No combined slip: drive force does not reduce lateral grip
-%   - Equal steer on both front wheels (no Ackermann)
+%   - Steering geometry: Ackermann fraction set by p.ackermann (no bump/roll steer)
 
 vx = x(1); vy = x(2); r = x(3);
 vx = max(vx, 1.0);                          % avoid slip-angle singularity at standstill
@@ -30,7 +30,15 @@ Fz = loadTransfer(p, ax_est, ay_est, vx);
 %% Wheel positions relative to CG
 xw = [ p.a,      p.a,     -p.b,     -p.b    ];
 yw = [ p.tf/2,  -p.tf/2,   p.tr/2,  -p.tr/2 ];
-dw = [ delta,    delta,    0,        0      ];   % steer angle per wheel
+% Ackermann: on a turn the inner wheel follows a tighter circle, so it needs
+% more steer. Geometric (100%) Ackermann gives each front wheel the angle
+% that points it along its own circle; p.ackermann blends from parallel (0).
+tdl = tan(delta);
+dL_ack = atan(p.L * tdl / (p.L - p.tf/2 * tdl));   % left wheel
+dR_ack = atan(p.L * tdl / (p.L + p.tf/2 * tdl));   % right wheel
+dL = delta + p.ackermann * (dL_ack - delta);
+dR = delta + p.ackermann * (dR_ack - delta);
+dw = [ dL,       dR,       0,        0      ];   % steer angle per wheel
 
 %% Slip angles: wheel velocity from rigid-body motion, minus steer
 vxw = vx - r .* yw;
@@ -38,7 +46,7 @@ vyw = vy + r .* xw;
 alpha = dw - atan2(vyw, vxw);
 
 %% Tyre forces in wheel frame
-Fyw = tyreLateral(p, alpha, Fz);
+[Fyw, Dpk] = tyreLateral(p, alpha, Fz);
 Fxw = [0, 0, Fdrive/2, Fdrive/2];
 
 %% Rotate into body frame
@@ -62,6 +70,7 @@ if nargout > 1
     out.alpha = alpha;
     out.Fz    = Fz;
     out.Fy    = Fyw;
+    out.Fypk  = Dpk;                    % peak available lateral force per tyre
     out.ay    = Fy / p.m;               % true lateral acceleration
     out.beta  = atan2(vy, vx);          % body slip angle
 end

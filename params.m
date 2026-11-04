@@ -16,6 +16,9 @@ p.Izz    = 120;     % yaw inertia [kg m^2]                    PLACEHOLDER
 p.a = p.L * (1 - p.wf);   % CG to front axle [m]
 p.b = p.L * p.wf;         % CG to rear axle [m]
 
+%% Steering
+p.ackermann = 1.0;  % 0 = parallel steer, 1 = 100% geometric Ackermann  PLACEHOLDER
+
 %% Roll / suspension
 p.hrcf   = 0.03;    % front roll centre height [m]            PLACEHOLDER
 p.hrcr   = 0.05;    % rear roll centre height [m]             PLACEHOLDER
