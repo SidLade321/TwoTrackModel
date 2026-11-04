@@ -28,6 +28,16 @@ p.ClA    = 3.0;     % downforce coefficient x area [m^2]      PLACEHOLDER
 p.CdA    = 1.2;     % drag coefficient x area [m^2]           PLACEHOLDER
 p.aeroBalF = 0.45;  % fraction of downforce on front axle [-] PLACEHOLDER
 
+%% Tyre (simplified Pacejka, lateral only)                  ALL PLACEHOLDER
+%  Fy = D*sin(C*atan(B*a - E*(B*a - atan(B*a))))
+%  D  = mu(Fz)*Fz, with mu falling as load rises (load sensitivity)
+p.tyre.B    = 17;     % stiffness factor [-]
+p.tyre.C    = 1.4;    % shape factor [-]
+p.tyre.E    = 0.0;    % curvature factor [-]
+p.tyre.mu0  = 1.6;    % peak friction coeff at nominal load [-]
+p.tyre.Fz0  = 700;    % nominal load [N]
+p.tyre.kmu  = -0.15;  % load sensitivity: fractional mu change per unit (Fz-Fz0)/Fz0
+
 %% Constants
 p.g = 9.81;         % [m/s^2]
 end

@@ -12,19 +12,33 @@ A bicycle model lumps each axle into one tyre, so it can't see lateral load tran
 |---|---|---|
 | 1 | Vehicle parameters (`params.m`) | Done |
 | 2 | Quasi-static load transfer: longitudinal, lateral (geometric + elastic split), aero (`loadTransfer.m`) | Done |
-| 3 | Tyre model (Pacejka with load sensitivity) | In progress |
-| 4 | 3-DOF equations of motion (vx, vy, yaw rate) | Planned |
+| 3 | Tyre model: simplified Pacejka with load sensitivity (`tyreLateral.m`) | Done |
+| 4 | 3-DOF equations of motion (vx, vy, yaw rate) | In progress |
 | 5 | Steady-state cornering: understeer gradient, max lateral g | Planned |
 | 6 | Transient: step steer and sine steer | Planned |
 | 7 | Validation against a bicycle model and team data | Planned |
 
 ## Usage
 ```matlab
-test_loadTransfer   % runs sanity checks and prints corner loads for 4 manoeuvres
+test_loadTransfer   % sanity checks + corner loads for 4 manoeuvres
+test_tyre           % tyre curves, load sensitivity, axle grip loss
 ```
 
 ## Example result
 Skidpad at 1.5 g, 15 m/s. Doubling the front roll stiffness (20 → 40 kNm/rad) cuts the inside front load from about 230 N to about 87 N. That shifts lateral load transfer forwards and adds understeer.
+
+## Tyre model and load sensitivity
+![Tyre curves](tyre_curves.png)
+
+Peak friction falls as vertical load rises, so lateral load transfer costs an axle grip: the outside tyre gains less than the inside tyre loses. Axle grip lost at a 1.5 g skidpad:
+
+| Front roll stiffness [Nm/rad] | Front grip loss | Rear grip loss |
+|---|---|---|
+| 10,000 | 3.8 % | 11.6 % |
+| 20,000 | 7.6 % | 6.9 % |
+| 40,000 | 12.4 % | 3.5 % |
+
+Shifting roll stiffness forwards moves the grip loss to the front axle, which means more understeer. This is the mechanism behind balance tuning with anti-roll bars.
 
 ## Notes
 All parameters are placeholder estimates for a typical FS car and will be replaced with team data. SI units throughout. Axes: x forward, y left, z up.
